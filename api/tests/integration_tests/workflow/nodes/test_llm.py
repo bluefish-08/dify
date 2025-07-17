@@ -1,5 +1,4 @@
 import json
-import os
 import time
 import uuid
 from collections.abc import Generator
@@ -9,16 +8,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core.app.entities.app_invoke_entities import InvokeFrom
+from core.llm_generator.output_parser.structured_output import _parse_structured_output
 from core.model_runtime.entities.llm_entities import LLMResult, LLMUsage
 from core.model_runtime.entities.message_entities import AssistantPromptMessage
 from core.workflow.entities.variable_pool import VariablePool
 from core.workflow.entities.workflow_node_execution import WorkflowNodeExecutionStatus
-from core.workflow.enums import SystemVariableKey
 from core.workflow.graph_engine.entities.graph import Graph
 from core.workflow.graph_engine.entities.graph_init_params import GraphInitParams
 from core.workflow.graph_engine.entities.graph_runtime_state import GraphRuntimeState
 from core.workflow.nodes.event import RunCompletedEvent
 from core.workflow.nodes.llm.node import LLMNode
+from core.workflow.system_variable import SystemVariable
 from extensions.ext_database import db
 from models.enums import UserFrom
 from models.workflow import WorkflowType
@@ -62,12 +62,14 @@ def init_llm_node(config: dict) -> LLMNode:
 
     # construct variable pool
     variable_pool = VariablePool(
-        system_variables={
-            SystemVariableKey.QUERY: "what's the weather today?",
-            SystemVariableKey.FILES: [],
-            SystemVariableKey.CONVERSATION_ID: "abababa",
-            SystemVariableKey.USER_ID: "aaa",
-        },
+        system_variables=SystemVariable(
+            user_id="aaa",
+            app_id=app_id,
+            workflow_id=workflow_id,
+            files=[],
+            query="what's the weather today?",
+            conversation_id="abababa",
+        ),
         user_inputs={},
         environment_variables=[],
         conversation_variables=[],
@@ -112,17 +114,15 @@ def test_execute_llm(flask_req_ctx):
         },
     )
 
-    credentials = {"openai_api_key": os.environ.get("OPENAI_API_KEY")}
-
     # Create a proper LLM result with real entities
     mock_usage = LLMUsage(
         prompt_tokens=30,
         prompt_unit_price=Decimal("0.001"),
-        prompt_price_unit=Decimal("1000"),
+        prompt_price_unit=Decimal(1000),
         prompt_price=Decimal("0.00003"),
         completion_tokens=20,
         completion_unit_price=Decimal("0.002"),
-        completion_price_unit=Decimal("1000"),
+        completion_price_unit=Decimal(1000),
         completion_price=Decimal("0.00004"),
         total_tokens=50,
         total_price=Decimal("0.00007"),
@@ -221,11 +221,11 @@ def test_execute_llm_with_jinja2(flask_req_ctx, setup_code_executor_mock):
     mock_usage = LLMUsage(
         prompt_tokens=30,
         prompt_unit_price=Decimal("0.001"),
-        prompt_price_unit=Decimal("1000"),
+        prompt_price_unit=Decimal(1000),
         prompt_price=Decimal("0.00003"),
         completion_tokens=20,
         completion_unit_price=Decimal("0.002"),
-        completion_price_unit=Decimal("1000"),
+        completion_price_unit=Decimal(1000),
         completion_price=Decimal("0.00004"),
         total_tokens=50,
         total_price=Decimal("0.00007"),
@@ -277,29 +277,6 @@ def test_execute_llm_with_jinja2(flask_req_ctx, setup_code_executor_mock):
 
 
 def test_extract_json():
-    node = init_llm_node(
-        config={
-            "id": "llm",
-            "data": {
-                "title": "123",
-                "type": "llm",
-                "model": {"provider": "openai", "name": "gpt-3.5-turbo", "mode": "chat", "completion_params": {}},
-                "prompt_config": {
-                    "structured_output": {
-                        "enabled": True,
-                        "schema": {
-                            "type": "object",
-                            "properties": {"name": {"type": "string"}, "age": {"type": "number"}},
-                        },
-                    }
-                },
-                "prompt_template": [{"role": "user", "text": "{{#sys.query#}}"}],
-                "memory": None,
-                "context": {"enabled": False},
-                "vision": {"enabled": False},
-            },
-        },
-    )
     llm_texts = [
         '<think>\n\n</think>{"name": "test", "age": 123',  # resoning model (deepseek-r1)
         '{"name":"test","age":123}',  # json schema model (gpt-4o)
@@ -308,4 +285,4 @@ def test_extract_json():
         '{"name":"test",age:123}',  # without quotes (qwen-2.5-0.5b)
     ]
     result = {"name": "test", "age": 123}
-    assert all(node._parse_structured_output(item) == result for item in llm_texts)
+    assert all(_parse_structured_output(item) == result for item in llm_texts)
