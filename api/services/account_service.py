@@ -613,13 +613,11 @@ class TenantService:
         account: Account, name: Optional[str] = None, is_setup: Optional[bool] = False
     ):
         """Check if user have a workspace or not"""
-        available_ta = (
-            db.session.query(TenantAccountJoin)
-            .filter_by(account_id=account.id)
-            .order_by(TenantAccountJoin.id.asc())
-            .first()
-        )
 
+        available_ta = (TenantAccountJoin.query.filter_by(
+            account_id=account.id).filter_by(role="owner").order_by(
+                TenantAccountJoin.id.asc()).first())
+                
         if available_ta:
             return
 

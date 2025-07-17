@@ -512,11 +512,12 @@ x-shared-env: &shared-api-worker-env
   QUEUE_MONITOR_THRESHOLD: ${QUEUE_MONITOR_THRESHOLD:-200}
   QUEUE_MONITOR_ALERT_EMAILS: ${QUEUE_MONITOR_ALERT_EMAILS:-}
   QUEUE_MONITOR_INTERVAL: ${QUEUE_MONITOR_INTERVAL:-30}
-
+  ADMIN_API_KEY_ENABLE: ${ADMIN_API_KEY_ENABLE:-false}
+  ADMIN_API_KEY: ${ADMIN_API_KEY:-}
 services:
   # API service
   api:
-    image: langgenius/dify-api:1.5.0
+    build: ../api
     restart: always
     environment:
       # Use the shared environment variables.
@@ -649,6 +650,7 @@ services:
     volumes:
       - ./volumes/sandbox/dependencies:/dependencies
       - ./volumes/sandbox/conf:/conf
+      - ./volumes/sandbox/file:/var/sandbox/sandbox-python/tmp/file:rw
     healthcheck:
       test: [ 'CMD', 'curl', '-f', 'http://localhost:8194/health' ]
     networks:
